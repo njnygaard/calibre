@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Chapter 2: Getting Started</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+    <h1>Chapter 2: Getting Started</h1>
+    
+    <p>Now that you understand what makes Rust special, let's get started with setting up your development environment and writing your first Rust program.</p>
+    
+    <h2>Installing Rust</h2>
+    
+    <p>The easiest way to install Rust is through rustup, the official Rust toolchain installer. Here's how to do it:</p>
+    
+    <h3>On Unix-like systems (Linux, macOS):</h3>
+    <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre>
+    
+    <h3>On Windows:</h3>
+    <p>Download and run rustup-init.exe from <a href="https://rustup.rs">https://rustup.rs</a></p>
+    
+    <p>After installation, restart your terminal and verify the installation:</p>
+    <pre><code>rustc --version
+cargo --version</code></pre>
+    
+    <h2>Your First Rust Program</h2>
+    
+    <p>Let's create a simple "Hello, World!" program to get started:</p>
+    
+    <pre><code>fn main() {
+    println!("Hello, World!");
+}</code></pre>
+    
+    <p>Save this code in a file named <code>main.rs</code> and run it with:</p>
+    <pre><code>rustc main.rs
+./main</code></pre>
+    
+    <h2>Using Cargo</h2>
+    
+    <p>Cargo is Rust's package manager and build tool. It's much more convenient than using rustc directly. Here's how to create a new project:</p>
+    
+    <pre><code>cargo new hello_rust
+cd hello_rust</code></pre>
+    
+    <p>This creates a new directory with the following structure:</p>
+    
+    <pre><code>hello_rust/
+├── Cargo.toml
+└── src/
+    └── main.rs</code></pre>
+    
+    <p>The <code>Cargo.toml</code> file contains your project's metadata and dependencies:</p>
+    
+    <pre><code>[package]
+name = "hello_rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]</code></pre>
+    
+    <h2>Building and Running</h2>
+    
+    <p>With Cargo, you can easily build and run your project:</p>
+    
+    <ul>
+        <li><code>cargo build</code> - Compiles your project</li>
+        <li><code>cargo run</code> - Compiles and runs your project</li>
+        <li><code>cargo check</code> - Checks if your code compiles without producing an executable</li>
+        <li><code>cargo test</code> - Runs your tests</li>
+    </ul>
+    
+    <h2>Adding Dependencies</h2>
+    
+    <p>To add external dependencies, edit your <code>Cargo.toml</code> file:</p>
+    
+    <pre><code>[package]
+name = "hello_rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0"
+tokio = { version = "1.0", features = ["full"] }</code></pre>
+    
+    <p>Then run <code>cargo build</code> to download and compile the dependencies.</p>
+    
+    <h2>IDE Support</h2>
+    
+    <p>Rust has excellent IDE support. Here are some popular options:</p>
+    
+    <ul>
+        <li><strong>VS Code:</strong> Install the "rust-analyzer" extension</li>
+        <li><strong>IntelliJ IDEA:</strong> Install the "Rust" plugin</li>
+        <li><strong>Vim/Neovim:</strong> Use rust-analyzer with LSP</li>
+        <li><strong>Emacs:</strong> Use rust-mode with rust-analyzer</li>
+    </ul>
+    
+    <h2>Documentation</h2>
+    
+    <p>Rust has excellent documentation. You can access it locally:</p>
+    
+    <pre><code>rustup doc</code></pre>
+    
+    <p>This opens the Rust documentation in your browser, including:</p>
+    
+    <ul>
+        <li>The Rust Programming Language Book</li>
+        <li>Rust by Example</li>
+        <li>Standard library documentation</li>
+        <li>Cargo documentation</li>
+    </ul>
+    
+    <p>In the next chapter, we'll dive deeper into Rust's basic concepts like variables, types, and control flow.</p>
+</body>
+</html> 

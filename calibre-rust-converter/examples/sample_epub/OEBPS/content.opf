@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+      <dc:title>Sample EPUB Book</dc:title>
+      <dc:creator>Rust Converter Team</dc:creator>
+      <dc:identifier id="BookId">urn:uuid:12345678-1234-1234-1234-123456789abc</dc:identifier>
+      <dc:language>en</dc:language>
+      <dc:publisher>Calibre Rust Converter</dc:publisher>
+      <dc:date>2024-01-01</dc:date>
+      <dc:description>A sample EPUB book for testing the Rust converter</dc:description>
+      <dc:subject>Programming</dc:subject>
+      <dc:subject>Rust</dc:subject>
+      <dc:subject>E-books</dc:subject>
+      <meta name="cover" content="cover.jpg"/>
+   </metadata>
+   
+   <manifest>
+      <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+      <item id="cover" href="cover.jpg" media-type="image/jpeg"/>
+      <item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>
+      <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+      <item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+      <item id="chapter3" href="chapter3.xhtml" media-type="application/xhtml+xml"/>
+      <item id="stylesheet" href="style.css" media-type="text/css"/>
+   </manifest>
+   
+   <spine toc="ncx">
+      <itemref idref="titlepage"/>
+      <itemref idref="chapter1"/>
+      <itemref idref="chapter2"/>
+      <itemref idref="chapter3"/>
+   </spine>
+   
+   <guide>
+      <reference type="cover" title="Cover" href="titlepage.xhtml"/>
+      <reference type="toc" title="Table of Contents" href="toc.ncx"/>
+   </guide>
+</package> 
