@@ -37,4 +37,6 @@ debug-output/
 test-*.epub
 test-*.mobi
 test-*.txt
-test-*.html 
+test-*.html examples/output_sample.mobi
+examples/output_sample.*
+examples/debug_output.mobi

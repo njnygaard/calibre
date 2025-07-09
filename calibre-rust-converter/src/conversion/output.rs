@@ -105,7 +105,7 @@ impl OutputWriter {
         // --- 3. Build header record (PalmDoc+MOBI+EXTH+title) ---
         let mut header_record = Vec::new();
         // PalmDoc header (16 bytes)
-        header_record.extend_from_slice(&[0x00, 0x02]); // compression: PalmDoc
+        header_record.extend_from_slice(&[0x00, 0x01]); // compression: none (1 = no compression in Calibre format)
         header_record.extend_from_slice(&[0x00, 0x00]); // unused
         header_record.extend_from_slice(&text_length.to_be_bytes()); // text length
         header_record.extend_from_slice(&(4096u16).to_be_bytes()); // record size
@@ -197,17 +197,18 @@ impl OutputWriter {
         let html_content = self.create_html_content(book);
         let html_bytes = html_content.as_bytes();
         
-        // Compress with PalmDoc
-        let compressed = self.compress_palmdoc(html_bytes)?;
+        // For now, don't compress to avoid artifacts
+        // TODO: Implement proper PalmDoc compression
+        let content = html_bytes.to_vec();
         
         // Split into 4096-byte records
         let mut records = Vec::new();
         let mut offset = 0;
         let mut record_count = 0;
         
-        while offset < compressed.len() {
-            let end = std::cmp::min(offset + 4096, compressed.len());
-            let mut record = compressed[offset..end].to_vec();
+        while offset < content.len() {
+            let end = std::cmp::min(offset + 4096, content.len());
+            let mut record = content[offset..end].to_vec();
             
             // Pad record to 4096 bytes
             while record.len() < 4096 {
@@ -232,18 +233,29 @@ impl OutputWriter {
             book.metadata.title.as_deref().unwrap_or("Untitled")));
         html.push_str("</head>\n<body>\n");
         
-        // Add content
+        // Add content from spine items
         for spine_item in &book.spine {
             if let Some(manifest_item) = book.manifest.get(&spine_item.id) {
                 if let Some(ref content_bytes) = manifest_item.content {
                     if let Ok(text) = String::from_utf8(content_bytes.clone()) {
-                        html.push_str(&text);
+                        // Extract only the body content, not the full HTML document
+                        if let Some(body_start) = text.find("<body>") {
+                            if let Some(body_end) = text.find("</body>") {
+                                let body_content = &text[body_start + 6..body_end];
+                                html.push_str(body_content);
+                                html.push_str("\n");
+                            }
+                        } else {
+                            // If no body tags, just add the content as-is
+                            html.push_str(&text);
+                            html.push_str("\n");
+                        }
                     }
                 }
             }
         }
         
-        html.push_str("\n</body>\n</html>");
+        html.push_str("</body>\n</html>");
         html
     }
     
