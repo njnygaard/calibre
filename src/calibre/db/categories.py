@@ -98,7 +98,7 @@ def create_tag_class(category, fm):
 
     if (
         (
-            ( category == 'authors' or
+            (category == 'authors' or
                 (cat['display'].get('is_names', False) and
                  cat['is_custom'] and cat['is_multiple'] and
                  dt == 'text')
@@ -133,7 +133,7 @@ def clean_user_categories(dbcache):
     try:
         if new_cats != user_cats:
             dbcache.set_pref('user_categories', new_cats)
-    except:
+    except Exception:
         pass
     return new_cats
 

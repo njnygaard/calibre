@@ -326,6 +326,8 @@ def init_env(debug=False, sanitize=False, compiling_for='native'):
                 cflags.append(f'{splat}/{I}')
             for L in 'sdk/lib/um crt/lib sdk/lib/ucrt'.split():
                 ldflags.append(f'/libpath:{splat}/{L}')
+            for L in os.environ.get('CROSS_LIBDIRS', '').split(os.pathsep):
+                ldflags.append(f'/libpath:{L}')
         else:
             for p in win_inc:
                 cflags.append('-I'+p)
@@ -615,7 +617,7 @@ class Build(Command):
         '''
         try:
             subprocess.check_call(*args, **kwargs)
-        except:
+        except Exception:
             cmdline = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in args[0]])
             print(f'Error while executing: {cmdline}\n')
             raise

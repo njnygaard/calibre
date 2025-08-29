@@ -411,7 +411,7 @@ def item_at_top(elem):
         try:
             if el.tag.endswith('}img') or (el.text and el.text.strip()):
                 return False
-        except:
+        except Exception:
             return False
         if not path.startswith(epath):
             # Only check tail of non-parent elements
@@ -703,7 +703,8 @@ def ensure_container_has_nav(container, lang=None, previous_nav=None):
             tocname = nav_name
             container.apply_unique_properties(tocname, 'nav')
     if tocname is None:
-        item = container.generate_item('nav.xhtml', id_prefix='nav')
+        name = previous_nav[0] if previous_nav is not None else 'nav.xhtml'
+        item = container.generate_item(name, id_prefix='nav')
         item.set('properties', 'nav')
         tocname = container.href_to_name(item.get('href'), base=container.opf_name)
         if previous_nav is not None:

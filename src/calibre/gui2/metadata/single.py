@@ -322,7 +322,11 @@ class MetadataSingleDialogBase(QDialog):
 
         self.fetch_metadata_button = b = CenteredToolButton(QIcon.ic('download-metadata.png'), _('&Download metadata'), self)
         b.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
-        b.setToolTip(_('Download metadata for this book [%s]') % self.download_shortcut.key().toString(QKeySequence.SequenceFormat.NativeText))
+        b.setToolTip(_(
+            'Download metadata for this book [{}]\n\nMetadata includes title, authors, series, covers, etc.\n'
+            'For improved results, you can install more metadata sources,\n'
+            'by clicking the configure button to the right.').format(
+                self.download_shortcut.key().toString(QKeySequence.SequenceFormat.NativeText)))
         self.fetch_metadata_button.clicked.connect(self.fetch_metadata)
         self.fetch_metadata_menu = m = QMenu(self.fetch_metadata_button)
         m.addAction(QIcon.ic('edit-undo.png'), _('Undo last metadata download'), self.undo_fetch_metadata)
@@ -717,7 +721,7 @@ class MetadataSingleDialogBase(QDialog):
         try:
             self.save_geometry(gprefs, 'metasingle_window_geometry3')
             self.save_widget_settings()
-        except:
+        except Exception:
             # Weird failure, see https://bugs.launchpad.net/bugs/995271
             import traceback
             traceback.print_exc()
@@ -802,7 +806,7 @@ class MetadataSingleDialogBase(QDialog):
         def disconnect(signal):
             try:
                 signal.disconnect()
-            except:
+            except Exception:
                 pass  # Fails if view format was never connected
         disconnect(self.view_format)
         disconnect(self.edit_format)

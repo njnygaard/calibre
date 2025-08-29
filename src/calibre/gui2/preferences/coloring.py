@@ -51,7 +51,7 @@ from calibre.constants import config_dir
 from calibre.gui2 import choose_files, choose_save_file, error_dialog, gprefs, info_dialog, open_local_file, pixmap_to_data, question_dialog
 from calibre.gui2.dialogs.template_dialog import TemplateDialog
 from calibre.gui2.metadata.single_download import RichTextDelegate
-from calibre.gui2.preferences import ListViewWithMoveByKeyPress
+from calibre.gui2.preferences import ListViewWithMoveByKeyPress, get_move_count
 from calibre.gui2.widgets2 import ColorButton, FlowLayout, Separator
 from calibre.library.coloring import Rule, color_row_key, conditionable_columns, displayable_columns, rule_from_template
 from calibre.utils.icu import lower, sort_key
@@ -157,7 +157,7 @@ class ConditionEditor(QWidget):  # {{{
         texts = _('If the ___ column ___ value')
         try:
             one, two, three = texts.split('___')
-        except:
+        except Exception:
             one, two, three = 'If the ', ' column ', ' value '
 
         self.l1 = l1 = QLabel(one)
@@ -663,7 +663,7 @@ class RuleEditor(QDialog):  # {{{
                                 os.makedirs(d)
                             with open(os.path.join(d, icon_name), 'wb') as f:
                                 f.write(pixmap_to_data(p, format='PNG'))
-                    except:
+                    except Exception:
                         import traceback
                         traceback.print_exc()
                     self.update_filename_box()
@@ -674,7 +674,7 @@ class RuleEditor(QDialog):  # {{{
                 else:
                     self.filename_box.setCurrentIndex(self.filename_box.findText(icon_name))
                 self.filename_box.adjustSize()
-        except:
+        except Exception:
             import traceback
             traceback.print_exc()
 
@@ -753,7 +753,7 @@ class RuleEditor(QDialog):  # {{{
             self.conditions_widget.layout().addWidget(ce)
             try:
                 ce.condition = c
-            except:
+            except Exception:
                 import traceback
                 traceback.print_exc()
 
@@ -820,7 +820,7 @@ class RulesModel(QAbstractListModel):  # {{{
             return
         try:
             rule = rule_from_template(self.fm, template)
-        except:
+        except Exception:
             rule = template
         return rule
 
@@ -853,7 +853,7 @@ class RulesModel(QAbstractListModel):  # {{{
         row = index.row()
         try:
             kind, col, rule = self.rules[row]
-        except:
+        except Exception:
             return None
         if role == Qt.ItemDataRole.DisplayRole:
             if col == color_row_key:
@@ -1060,12 +1060,18 @@ class EditRules(QWidget):  # {{{
 
         self.up_button = b = QToolButton(self)
         b.setIcon(QIcon.ic('arrow-up.png'))
-        b.setToolTip(_('Move the selected rule up'))
+        b.setToolTip('<p>' + _('Click to move the row up 1. Shift+click '
+                       'to move the row up 5. Ctrl+click to move the row up 10. '
+                       'Ctrl+Shift+click to move the row to the top. '
+                       'Keyboard shortcut: Ctrl+Up arrow') + '</p>')
         b.clicked.connect(partial(self.move_rows, moving_up=True))
         g.addWidget(b, 0, 1, 1, 1, Qt.AlignmentFlag.AlignTop)
         self.down_button = b = QToolButton(self)
         b.setIcon(QIcon.ic('arrow-down.png'))
-        b.setToolTip(_('Move the selected rule down'))
+        b.setToolTip('<p>' + _('Click to move the row down 1. Shift+click to move the '
+                        'row down 5. Ctrl+click to move the row down 10. Ctrl+Shift+click '
+                        'to move the row to the bottom. '
+                        'Keyboard shortcut: Ctrl+Down arrow') + '</p>')
         b.clicked.connect(partial(self.move_rows, moving_up=False))
         self.rules_view.set_movement_functions(partial(self.move_rows, moving_up=True),
                                                partial(self.move_rows, moving_up=False))
@@ -1231,7 +1237,7 @@ class EditRules(QWidget):  # {{{
     def edit_rule(self, index):
         try:
             kind, col, rule = self.model.data(index, Qt.ItemDataRole.UserRole)
-        except:
+        except Exception:
             return
         if isinstance(rule, Rule):
             d = RuleEditor(self.model.fm, self.pref_name)
@@ -1275,27 +1281,29 @@ class EditRules(QWidget):  # {{{
                 self.model.remove_rule(row)
             self.changed.emit()
 
-    def move_rows(self, moving_up=True):
-        sm = self.rules_view.selectionModel()
-        rows = sorted(sm.selectedRows(), reverse=not moving_up)
-        if rows:
-            if rows[0].row() == (0 if moving_up else self.model.rowCount() - 1):
-                return
-            sm.clear()
-            indices_to_select = []
-            for idx in rows:
-                if idx.isValid():
-                    idx = self.model.move(idx, -1 if moving_up else 1)
-                    if idx is not None:
-                        indices_to_select.append(idx)
-            if indices_to_select:
-                new_selections = QItemSelection()
-                for idx in indices_to_select:
-                    new_selections.merge(QItemSelection(idx, idx),
-                                         QItemSelectionModel.SelectionFlag.Select)
-                sm.select(new_selections, QItemSelectionModel.SelectionFlag.Select)
-                self.rules_view.scrollTo(indices_to_select[0])
-            self.changed.emit()
+    def move_rows(self, moving_up=True, use_kbd_modifiers=True):
+        count = get_move_count(self.rules_view.model().rowCount()) if use_kbd_modifiers else 1
+        for _ in range(count):
+            sm = self.rules_view.selectionModel()
+            rows = sorted(sm.selectedRows(), reverse=not moving_up)
+            if rows:
+                if rows[0].row() == (0 if moving_up else self.model.rowCount() - 1):
+                    return
+                sm.clear()
+                indices_to_select = []
+                for idx in rows:
+                    if idx.isValid():
+                        idx = self.model.move(idx, -1 if moving_up else 1)
+                        if idx is not None:
+                            indices_to_select.append(idx)
+                if indices_to_select:
+                    new_selections = QItemSelection()
+                    for idx in indices_to_select:
+                        new_selections.merge(QItemSelection(idx, idx),
+                                             QItemSelectionModel.SelectionFlag.Select)
+                    sm.select(new_selections, QItemSelectionModel.SelectionFlag.Select)
+                    self.rules_view.scrollTo(indices_to_select[0])
+                self.changed.emit()
 
     def clear(self):
         self.model.clear()

@@ -102,18 +102,18 @@ class Polish(QDialog):  # {{{
         count = 0
         self.all_actions = OrderedDict([
             ('embed', _('&Embed all referenced fonts')),
-            ('subset', _('&Subset all embedded fonts')),
+            ('subset', _('Su&bset all embedded fonts')),
             ('smarten_punctuation', _('Smarten &punctuation')),
             ('metadata', _('Update &metadata in the book files')),
-            ('do_cover', _('Update the &cover in the book files')),
+            ('do_cover', _('Update the co&ver in the book files')),
             ('jacket', _('Add/replace metadata as a "book &jacket" page')),
-            ('remove_jacket', _('&Remove a previously inserted book jacket')),
+            ('remove_jacket', _('Remove a previously inserted book jac&ket')),
             ('remove_unused_css', _('Remove &unused CSS rules from the book')),
-            ('compress_images', _('Losslessly &compress images')),
+            ('compress_images', _('Losslessly compress &images')),
             ('download_external_resources', _('&Download external resources')),
-            ('add_soft_hyphens', _('Add s&oft hyphens')),
-            ('remove_soft_hyphens', _('Remove so&ft hyphens')),
-            ('upgrade_book', _('&Upgrade book internals')),
+            ('add_soft_hyphens', _('Add soft &hyphens')),
+            ('remove_soft_hyphens', _('Remove soft h&yphens')),
+            ('upgrade_book', _('Up&grade book internals')),
         ])
         prefs = gprefs.get('polishing_settings', {})
         for name, text in iteritems(self.all_actions):
@@ -161,6 +161,7 @@ class Polish(QDialog):  # {{{
         self.none_button = b = bb.addButton(_('Select &none'), QDialogButtonBox.ButtonRole.ActionRole)
         connect_lambda(b.clicked, self, lambda self: self.select_all(False))
         l.addWidget(bb, count+1, 1, 1, -1)
+        bb.setFocus()
         self.setup_load_button()
         self.resize(self.sizeHint())
 
@@ -288,7 +289,7 @@ class Polish(QDialog):  # {{{
         num, book_id = self.queue.pop(0)
         try:
             self.do_book(num, book_id, self.book_id_map[book_id])
-        except:
+        except Exception:
             self.pd.reject()
             raise
         else:
@@ -543,7 +544,7 @@ class PolishAction(InterfaceActionWithLibraryDrop):
             shutil.rmtree(base)
             parent = os.path.dirname(base)
             os.rmdir(parent)
-        except:
+        except Exception:
             pass
         self.to_be_refreshed.add(book_id)
         self.refresh_debounce_timer.start()

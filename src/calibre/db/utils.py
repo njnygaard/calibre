@@ -35,7 +35,7 @@ def force_to_bool(val):
                 val = False
             else:
                 val = bool(int(val))
-        except:
+        except Exception:
             val = None
     return val
 
@@ -460,19 +460,19 @@ def human_readable_interval(secs):
     seconds = secs % 60
     parts = []
     if days > 0:
-        parts.append(ngettext('one day', '{} days', days).format(days))
+        parts.append(ngettext('1 day', '{} days', days).format(days))
         if hours > 0:
-            parts.append(ngettext('one hour', '{} hours', hours).format(hours))
+            parts.append(ngettext('1 hour', '{} hours', hours).format(hours))
     elif hours > 0:
-        parts.append(ngettext('one hour', '{} hours', hours).format(hours))
+        parts.append(ngettext('1 hour', '{} hours', hours).format(hours))
         if minutes > 0:
-            parts.append(ngettext('one minute', '{} minutes', minutes).format(minutes))
+            parts.append(ngettext('1 minute', '{} minutes', minutes).format(minutes))
     elif minutes > 0:
-        parts.append(ngettext('one minute', '{} minutes', minutes).format(minutes))
+        parts.append(ngettext('1 minute', '{} minutes', minutes).format(minutes))
         if secs > 0:
-            parts.append(ngettext('one second', '{} seconds', seconds).format(seconds))
+            parts.append(ngettext('1 second', '{} seconds', seconds).format(seconds))
     elif secs > 0:
-        parts.append(ngettext('one second', '{} seconds', seconds).format(seconds))
+        parts.append(ngettext('1 second', '{} seconds', seconds).format(seconds))
     return ' '.join(parts)
 
 

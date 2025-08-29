@@ -13,6 +13,7 @@ from calibre.gui2.dialogs.template_dialog import TemplateDialog
 from calibre.gui2.preferences import AbortInitialize, ConfigWidgetBase, test_widget
 from calibre.gui2.preferences.template_functions_ui import Ui_Form
 from calibre.gui2.widgets import PythonHighlighter
+from calibre.utils.ffml_processor import FFMLProcessor
 from calibre.utils.formatter_functions import (
     StoredObjectType,
     compile_user_function,
@@ -31,6 +32,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
     def genesis(self, gui):
         self.gui = gui
         self.db = gui.library_view.model().db
+        self.ffml = FFMLProcessor()
 
         help_text = _('''
         <p>Here you can add and remove functions used in template processing. A
@@ -155,7 +157,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         try:
             self.builtin_source_dict = json.loads(P('template-functions.json', data=True,
                 allow_user_override=False).decode('utf-8'))
-        except:
+        except Exception:
             traceback.print_exc()
             self.builtin_source_dict = {}
 
@@ -169,7 +171,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             for v in self.db.prefs.get('user_template_functions', []):
                 if function_object_type(v) is not StoredObjectType.PythonFunction:
                     self.st_funcs.update({function_pref_name(v):compile_user_function(*v)})
-        except:
+        except Exception:
             if question_dialog(self, _('Template functions'),
                     _('The template functions saved in the library are corrupt. '
                       "Do you want to delete them? Answering 'Yes' will delete all "
@@ -339,7 +341,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             prog = str(self.program.toPlainText())
             compile_user_function(name, str(self.documentation.toPlainText()),
                                         self.argument_count.value(), prog)
-        except:
+        except Exception:
             error_dialog(self.gui, _('Template functions'),
                          _('Exception while compiling function'), show=True,
                          det_msg=traceback.format_exc())
@@ -358,7 +360,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
                                         self.argument_count.value(), prog)
             self.funcs[name] = cls
             self.build_function_names_box(scroll_to=name)
-        except:
+        except Exception:
             error_dialog(self.gui, _('Template functions'),
                          _('Exception while compiling function'), show=True,
                          det_msg=traceback.format_exc())
@@ -387,7 +389,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             return
         func = self.funcs[txt]
         self.argument_count.setValue(func.arg_count)
-        self.documentation.setText(func.doc)
+        self.documentation.setHtml(self.ffml.document_to_html(func.doc, txt))
         if txt in self.builtins:
             if hasattr(func, 'program_text') and func.program_text:
                 self.program.setPlainText(func.program_text)
@@ -540,7 +542,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
                                         0, prog)
             self.st_funcs[name] = cls
             self.st_build_function_names_box(scroll_to=name)
-        except:
+        except Exception:
             error_dialog(self.gui, _('Stored templates'),
                          _('Exception while storing template'), show=True,
                          det_msg=traceback.format_exc())
