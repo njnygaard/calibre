@@ -40,3 +40,4 @@ test-*.txt
 test-*.html examples/output_sample.mobi
 examples/output_sample.*
 examples/debug_output.mobi
+*.epub

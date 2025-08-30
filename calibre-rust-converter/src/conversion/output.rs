@@ -65,16 +65,178 @@ impl OutputWriter {
         Ok(())
     }
     
-    pub async fn write_epub(&self, _book: &Book, _path: &Path) -> Result<()> {
-        debug!("Writing EPUB file (placeholder)");
+    pub async fn write_epub(&self, book: &Book, path: &Path) -> Result<()> {
+        debug!("Writing EPUB file: {:?}", path);
         
-        // TODO: Implement EPUB writing
-        // - Create container.xml
-        // - Create content.opf
-        // - Create navigation files
-        // - Package as ZIP
+        use zip::{ZipWriter, CompressionMethod};
+        use std::fs::File;
+        use std::io::Write;
         
+        let file = File::create(path)?;
+        let mut zip = ZipWriter::new(file);
+        
+        // Add mimetype (uncompressed, first file)
+        let options = zip::write::FileOptions::default()
+            .compression_method(CompressionMethod::Stored); // No compression for mimetype
+        zip.start_file("mimetype", options)?;
+        zip.write_all(b"application/epub+zip")?;
+        
+        // Add META-INF/container.xml
+        let options = zip::write::FileOptions::default()
+            .compression_method(CompressionMethod::Deflated);
+        zip.start_file("META-INF/container.xml", options)?;
+        zip.write_all(self.create_container_xml().as_bytes())?;
+        
+        // Add OEBPS/content.opf
+        zip.start_file("OEBPS/content.opf", options)?;
+        zip.write_all(self.create_content_opf(book).as_bytes())?;
+        
+        // Add OEBPS/toc.ncx
+        zip.start_file("OEBPS/toc.ncx", options)?;
+        zip.write_all(self.create_toc_ncx(book).as_bytes())?;
+        
+        // Add OEBPS/stylesheet.css
+        zip.start_file("OEBPS/stylesheet.css", options)?;
+        zip.write_all(self.create_stylesheet().as_bytes())?;
+        
+        // Add content files from manifest
+        for (_id, item) in &book.manifest {
+            if let Some(content) = &item.content {
+                let file_path = format!("OEBPS/{}", item.href);
+                zip.start_file(&file_path, options)?;
+                zip.write_all(content)?;
+                debug!("Added content file: {} ({} bytes)", file_path, content.len());
+            }
+        }
+        
+        zip.finish()?;
+        debug!("Successfully created EPUB file: {:?}", path);
         Ok(())
+    }
+    
+    fn create_container_xml(&self) -> String {
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+    <rootfiles>
+        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+    </rootfiles>
+</container>"#.to_string()
+    }
+    
+    fn create_content_opf(&self, book: &Book) -> String {
+        use uuid::Uuid;
+        let book_id = Uuid::new_v4().to_string();
+        
+        let mut opf = String::new();
+        opf.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        opf.push_str("<package version=\"2.0\" xmlns=\"http://www.idpf.org/2007/opf\" unique-identifier=\"BookId\">\n");
+        
+        // Metadata section
+        opf.push_str("  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:opf=\"http://www.idpf.org/2007/opf\">\n");
+        opf.push_str(&format!("    <dc:identifier id=\"BookId\" opf:scheme=\"UUID\">{}</dc:identifier>\n", book_id));
+        opf.push_str(&format!("    <dc:title>{}</dc:title>\n", 
+            self.escape_xml(book.metadata.title.as_deref().unwrap_or("Untitled"))));
+        
+        if let Some(author) = &book.metadata.author {
+            opf.push_str(&format!("    <dc:creator opf:role=\"aut\">{}</dc:creator>\n", self.escape_xml(author)));
+        }
+        
+        if let Some(publisher) = &book.metadata.publisher {
+            opf.push_str(&format!("    <dc:publisher>{}</dc:publisher>\n", self.escape_xml(publisher)));
+        }
+        
+        if let Some(description) = &book.metadata.description {
+            opf.push_str(&format!("    <dc:description>{}</dc:description>\n", self.escape_xml(description)));
+        }
+        
+        opf.push_str(&format!("    <dc:language>{}</dc:language>\n", 
+            book.metadata.language.as_deref().unwrap_or("en")));
+        
+        opf.push_str("    <meta name=\"generator\" content=\"Calibre Rust Converter\"/>\n");
+        opf.push_str("  </metadata>\n");
+        
+        // Manifest section
+        opf.push_str("  <manifest>\n");
+        
+        // Add navigation files
+        opf.push_str("    <item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");
+        
+        // Add stylesheet
+        opf.push_str("    <item id=\"css\" href=\"stylesheet.css\" media-type=\"text/css\"/>\n");
+        
+        // Add content items
+        for (id, item) in &book.manifest {
+            opf.push_str(&format!("    <item id=\"{}\" href=\"{}\" media-type=\"{}\"/>\n",
+                self.escape_xml(id),
+                self.escape_xml(&item.href),
+                self.escape_xml(&item.media_type)
+            ));
+        }
+        
+        opf.push_str("  </manifest>\n");
+        
+        // Spine section
+        opf.push_str("  <spine toc=\"ncx\">\n");
+        for spine_item in &book.spine {
+            opf.push_str(&format!("    <itemref idref=\"{}\"/>\n", self.escape_xml(&spine_item.id)));
+        }
+        opf.push_str("  </spine>\n");
+        
+        opf.push_str("</package>\n");
+        opf
+    }
+    
+    fn create_toc_ncx(&self, book: &Book) -> String {
+        use uuid::Uuid;
+        let book_id = Uuid::new_v4().to_string();
+        
+        let mut ncx = String::new();
+        ncx.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        ncx.push_str("<!DOCTYPE ncx PUBLIC \"-//NISO//DTD ncx 2005-1//EN\" \"http://www.daisy.org/z3986/2005/ncx-2005-1.dtd\">\n");
+        ncx.push_str("<ncx version=\"2005-1\" xmlns=\"http://www.daisy.org/z3986/2005/ncx/\">\n");
+        
+        // Head section
+        ncx.push_str("  <head>\n");
+        ncx.push_str(&format!("    <meta name=\"dtb:uid\" content=\"{}\"/>\n", book_id));
+        ncx.push_str("    <meta name=\"dtb:depth\" content=\"1\"/>\n");
+        ncx.push_str("    <meta name=\"dtb:totalPageCount\" content=\"0\"/>\n");
+        ncx.push_str("    <meta name=\"dtb:maxPageNumber\" content=\"0\"/>\n");
+        ncx.push_str("  </head>\n");
+        
+        // Doc title
+        ncx.push_str("  <docTitle>\n");
+        ncx.push_str(&format!("    <text>{}</text>\n", 
+            self.escape_xml(book.metadata.title.as_deref().unwrap_or("Untitled"))));
+        ncx.push_str("  </docTitle>\n");
+        
+        // Navigation map
+        ncx.push_str("  <navMap>\n");
+        
+        // Create simple navigation points for spine items
+        for (index, spine_item) in book.spine.iter().enumerate() {
+            let title = if index == 0 {
+                book.metadata.title.as_deref().unwrap_or("Start").to_string()
+            } else {
+                format!("Section {}", index + 1)
+            };
+            
+            ncx.push_str(&format!("    <navPoint id=\"navpoint-{}\" playOrder=\"{}\">\n", index + 1, index + 1));
+            ncx.push_str(&format!("      <navLabel><text>{}</text></navLabel>\n", self.escape_xml(&title)));
+            ncx.push_str(&format!("      <content src=\"{}\"/>\n", self.escape_xml(&spine_item.href)));
+            ncx.push_str("    </navPoint>\n");
+        }
+        
+        ncx.push_str("  </navMap>\n");
+        ncx.push_str("</ncx>\n");
+        ncx
+    }
+    
+    fn escape_xml(&self, text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
     }
     
     pub async fn write_mobi(&self, book: &Book, path: &Path) -> Result<()> {
@@ -319,5 +481,60 @@ impl OutputWriter {
         // - Create index.html
         
         Ok(())
+    }
+    
+    fn create_stylesheet(&self) -> String {
+        // Create a basic stylesheet based on the known good EPUB
+        r#"@namespace h "http://www.w3.org/1999/xhtml";
+
+body {
+    font-family: serif;
+    margin: 1em;
+    line-height: 1.4;
+}
+
+p {
+    margin: 0 0 1em 0;
+    text-align: justify;
+    text-indent: 1.5em;
+}
+
+.page-break {
+    page-break-before: always;
+}
+
+font[size="7"] {
+    font-size: 2em;
+    font-weight: bold;
+}
+
+font[size="5"] {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+b {
+    font-weight: bold;
+}
+
+center {
+    text-align: center;
+}
+
+div {
+    margin: 0;
+}
+
+/* Style for height and width attributes on paragraphs */
+p[height="1em"] {
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
+p[height="0pt"] {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+"#.to_string()
     }
 } 

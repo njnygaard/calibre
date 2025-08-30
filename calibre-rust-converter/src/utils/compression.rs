@@ -106,41 +106,55 @@ pub fn compress_palmdoc(data: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn decompress_palmdoc(data: &[u8]) -> Result<Vec<u8>> {
-    let mut decompressed = Vec::new();
+    // Start with a reasonable capacity (8x input size like Calibre)
+    let mut output = Vec::with_capacity(data.len() * 8);
     let mut i = 0;
     
     while i < data.len() {
-        let byte = data[i];
+        let c = data[i];
+        i += 1;
         
-        if (byte & 0x80) != 0 {
-            // This is a match
-            if i + 2 >= data.len() {
-                return Err(anyhow::anyhow!("Invalid PalmDOC data"));
+        if c >= 1 && c <= 8 {
+            // Copy 'c' bytes literally
+            let mut count = c;
+            while count > 0 && i < data.len() {
+                output.push(data[i]);
+                i += 1;
+                count -= 1;
             }
+        } else if c <= 0x7F {
+            // Literal byte (0, 9-0x7F) - includes 0
+            output.push(c);
+        } else if c >= 0xC0 {
+            // Space + ASCII char (c & 0x7F gives us the ASCII char)
+            output.push(b' ');
+            output.push(c ^ 0x80);
+        } else if i < data.len() {
+            // Repeat sequence (0x80-0xBF) - exactly like Calibre's C code
+            let c2 = data[i];
+            i += 1;
             
-            let offset = (((byte & 0x7F) as usize) << 8) | (data[i + 1] as usize);
-            let length = data[i + 2] as usize;
+            // Combine bytes: c = (c << 8) + input[i++];
+            let combined = ((c as u16) << 8) | (c2 as u16);
             
-            if offset > decompressed.len() || length == 0 {
-                return Err(anyhow::anyhow!("Invalid PalmDOC match"));
-            }
+            // di = (c & 0x3FFF) >> 3;
+            let distance = (combined & 0x3FFF) >> 3;
             
-            for _ in 0..length {
-                let pos = decompressed.len() - offset;
-                if pos < decompressed.len() {
-                    decompressed.push(decompressed[pos]);
-                } else {
-                    decompressed.push(0);
+            // Length: n = (c & 7) + 3;
+            let length = (combined & 7) + 3;
+            
+            // Only proceed if distance is valid: if (di <= o)
+            if distance as usize <= output.len() && distance > 0 {
+                // Copy bytes from earlier in the output
+                for _ in 0..length {
+                    let source_index = output.len() - distance as usize;
+                    let byte_to_copy = output[source_index];
+                    output.push(byte_to_copy);
                 }
             }
-            
-            i += 3;
-        } else {
-            // This is a literal
-            decompressed.push(byte);
-            i += 1;
+            // If distance is invalid, skip this sequence (like Calibre does)
         }
     }
     
-    Ok(decompressed)
+    Ok(output)
 } 
