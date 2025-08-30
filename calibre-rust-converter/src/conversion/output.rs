@@ -2,8 +2,7 @@ use anyhow::Result;
 use std::path::Path;
 use tracing::debug;
 use crate::conversion::book::Book;
-use std::fs::File;
-use std::io::{Write, BufWriter};
+use std::io::Write;
 
 
 pub struct OutputWriter;
@@ -212,18 +211,30 @@ impl OutputWriter {
         // Navigation map
         ncx.push_str("  <navMap>\n");
         
-        // Create simple navigation points for spine items
-        for (index, spine_item) in book.spine.iter().enumerate() {
-            let title = if index == 0 {
-                book.metadata.title.as_deref().unwrap_or("Start").to_string()
-            } else {
-                format!("Section {}", index + 1)
-            };
-            
-            ncx.push_str(&format!("    <navPoint id=\"navpoint-{}\" playOrder=\"{}\">\n", index + 1, index + 1));
-            ncx.push_str(&format!("      <navLabel><text>{}</text></navLabel>\n", self.escape_xml(&title)));
-            ncx.push_str(&format!("      <content src=\"{}\"/>\n", self.escape_xml(&spine_item.href)));
-            ncx.push_str("    </navPoint>\n");
+        // Use TOC if available, otherwise fall back to spine items
+        if let Some(toc) = &book.toc {
+            for (index, toc_item) in toc.items.iter().enumerate() {
+                ncx.push_str(&format!("    <navPoint id=\"navpoint-{}\" playOrder=\"{}\">\n", index + 1, index + 1));
+                ncx.push_str(&format!("      <navLabel><text>{}</text></navLabel>\n", self.escape_xml(&toc_item.title)));
+                if let Some(href) = &toc_item.href {
+                    ncx.push_str(&format!("      <content src=\"{}\"/>\n", self.escape_xml(href)));
+                }
+                ncx.push_str("    </navPoint>\n");
+            }
+        } else {
+            // Fallback to spine items
+            for (index, spine_item) in book.spine.iter().enumerate() {
+                let title = if index == 0 {
+                    book.metadata.title.as_deref().unwrap_or("Start").to_string()
+                } else {
+                    format!("Section {}", index + 1)
+                };
+                
+                ncx.push_str(&format!("    <navPoint id=\"navpoint-{}\" playOrder=\"{}\">\n", index + 1, index + 1));
+                ncx.push_str(&format!("      <navLabel><text>{}</text></navLabel>\n", self.escape_xml(&title)));
+                ncx.push_str(&format!("      <content src=\"{}\"/>\n", self.escape_xml(&spine_item.href)));
+                ncx.push_str("    </navPoint>\n");
+            }
         }
         
         ncx.push_str("  </navMap>\n");
@@ -240,7 +251,7 @@ impl OutputWriter {
     }
     
     pub async fn write_mobi(&self, book: &Book, path: &Path) -> Result<()> {
-        use std::io::{Seek, SeekFrom};
+        // Removed unused imports
         debug!("Writing MOBI file: {:?}", path);
 
         // --- 1. Prepare content records (PalmDoc compression) ---
@@ -421,6 +432,7 @@ impl OutputWriter {
         html
     }
     
+    #[allow(dead_code)]
     fn compress_palmdoc(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Simple PalmDoc compression implementation
         // This is a basic implementation - in production you'd want a more robust one

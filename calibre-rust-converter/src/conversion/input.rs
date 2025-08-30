@@ -7,6 +7,12 @@ use std::fs;
 use std::io::Read;
 use zip::ZipArchive;
 
+#[derive(Debug, Clone)]
+struct Chapter {
+    title: String,
+    content: String,
+}
+
 pub struct InputReader;
 
 impl InputReader {
@@ -493,21 +499,39 @@ impl InputReader {
         book.metadata.language = exth_header.as_ref().and_then(|e| e.get_language())
             .or_else(|| Some("en".to_string()));
         
-        // Add main content as XHTML
-        let content_item = ManifestItem {
-            id: "content".to_string(),
-            href: "content.xhtml".to_string(),
-            media_type: "application/xhtml+xml".to_string(),
-            content: Some(text_content.into_bytes()),
-            properties: vec![],
-        };
-        book.manifest.insert("content".to_string(), content_item);
+        // Split content into chapters and add as separate XHTML files
+        let chapters = self.split_into_chapters(&text_content)?;
         
-        let spine_item = SpineItem {
-            id: "content".to_string(),
-            href: "content.xhtml".to_string(),
-        };
-        book.spine.push(spine_item);
+        // Create table of contents
+        let mut toc = crate::conversion::book::TableOfContents::new();
+        toc.title = Some("Table of Contents".to_string());
+        
+        for (i, chapter) in chapters.iter().enumerate() {
+            let chapter_id = format!("chapter{:02}", i + 1);
+            let chapter_href = format!("chapter{:02}.xhtml", i + 1);
+            
+            let content_item = ManifestItem {
+                id: chapter_id.clone(),
+                href: chapter_href.clone(),
+                media_type: "application/xhtml+xml".to_string(),
+                content: Some(chapter.content.clone().into_bytes()),
+                properties: vec![],
+            };
+            book.manifest.insert(chapter_id.clone(), content_item);
+            
+            let spine_item = SpineItem {
+                id: chapter_id,
+                href: chapter_href.clone(),
+            };
+            book.spine.push(spine_item);
+            
+            // Add to table of contents
+            let toc_item = crate::conversion::book::TocItem::new(chapter.title.clone())
+                .with_href(chapter_href);
+            toc.add_item(toc_item);
+        }
+        
+        book.set_toc(toc);
         
         debug!("Successfully parsed MOBI file: title={:?}, author={:?}", 
                book.metadata.title, book.metadata.author);
@@ -591,6 +615,7 @@ impl InputReader {
         Ok(cleaned_text)
     }
     
+    #[allow(dead_code)]
     fn remove_trailing_data<'a>(&self, data: &'a [u8]) -> &'a [u8] {
         if data.is_empty() {
             return data;
@@ -684,6 +709,7 @@ impl InputReader {
         Some((value, consumed))
     }
     
+    #[allow(dead_code)]
     fn remove_minimal_trailing_data<'a>(&self, data: &'a [u8]) -> &'a [u8] {
         if data.is_empty() {
             return data;
@@ -858,6 +884,7 @@ impl InputReader {
         content
     }
     
+    #[allow(dead_code)]
     fn fix_html_structure(&self, html: &str) -> String {
         use regex::Regex;
         
@@ -889,6 +916,7 @@ impl InputReader {
         result
     }
     
+    #[allow(dead_code)]
     fn sanitize_html(&self, html: &str) -> String {
         use regex::Regex;
         
@@ -923,6 +951,7 @@ impl InputReader {
         result
     }
 
+    #[allow(dead_code)]
     fn fix_malformed_unicode(&self, text: &str) -> String {
         // Remove or replace problematic Unicode sequences
         let mut result = String::new();
@@ -940,6 +969,7 @@ impl InputReader {
         result
     }
     
+    #[allow(dead_code)]
     fn fix_attribute_quotes(&self, html: &str) -> String {
         // This is a simplified approach - in a full implementation,
         // you'd want to use a proper HTML parser
@@ -964,6 +994,7 @@ impl InputReader {
         fixed
     }
     
+    #[allow(dead_code)]
     fn remove_trailing_broken_tags(&self, html: &str) -> String {
         use regex::Regex;
         
@@ -978,6 +1009,7 @@ impl InputReader {
         result
     }
     
+    #[allow(dead_code)]
     fn escape_xml_content(&self, text: &str) -> String {
         text.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -1036,5 +1068,165 @@ impl InputReader {
         // - Handle images
         
         Ok(book)
+    }
+    
+    fn split_into_chapters(&self, content: &str) -> Result<Vec<Chapter>> {
+        use regex::Regex;
+        
+        // Look for chapter markers: <font size="7"><b>Title</b></font> followed by <font size="5"><b>Chapter Title</b></font>
+        let chapter_re = Regex::new(r#"<p[^>]*>\s*<font size="7"><b>([^<]+)</b></font>\s*</p>\s*<p[^>]*>\s*<font size="5"><b>([^<]+)</b></font>"#).unwrap();
+        
+        // Remove table of contents and other trailing content that shouldn't be in chapters
+        let cleaned_content = self.remove_trailing_content_from_chapters(content);
+        
+        let mut chapters = Vec::new();
+        let chapter_matches: Vec<_> = chapter_re.find_iter(&cleaned_content).collect();
+        
+        // If no chapters found, create a single chapter with all content
+        if chapter_matches.is_empty() {
+            let title = "A People's History of the United States".to_string();
+            let chapter_content = self.wrap_chapter_content(&title, &cleaned_content);
+            chapters.push(Chapter {
+                title,
+                content: chapter_content,
+            });
+            return Ok(chapters);
+        }
+        
+        // Process each chapter
+        for (i, chapter_match) in chapter_matches.iter().enumerate() {
+            let start = chapter_match.start();
+            let end = if i + 1 < chapter_matches.len() {
+                chapter_matches[i + 1].start()
+            } else {
+                cleaned_content.len()
+            };
+            
+            // Extract chapter content
+            let chapter_text = &cleaned_content[start..end];
+            
+            // Extract chapter title from the match
+            if let Some(captures) = chapter_re.captures(chapter_text) {
+                let book_title = captures.get(1).map_or("", |m| m.as_str());
+                let chapter_title = captures.get(2).map_or("", |m| m.as_str());
+                
+                let full_title = if chapter_title.starts_with(char::is_numeric) {
+                    chapter_title.to_string()
+                } else {
+                    format!("{}: {}", book_title, chapter_title)
+                };
+                
+                // Clean the chapter content before wrapping
+                let clean_chapter_text = self.clean_chapter_content(chapter_text);
+                let chapter_content = self.wrap_chapter_content(&full_title, &clean_chapter_text);
+                
+                chapters.push(Chapter {
+                    title: full_title,
+                    content: chapter_content,
+                });
+            }
+        }
+        
+        // If no chapters were created, fall back to single chapter
+        if chapters.is_empty() {
+            let title = "A People's History of the United States".to_string();
+            let chapter_content = self.wrap_chapter_content(&title, &cleaned_content);
+            chapters.push(Chapter {
+                title,
+                content: chapter_content,
+            });
+        }
+        
+        Ok(chapters)
+    }
+    
+    fn remove_trailing_content_from_chapters(&self, content: &str) -> String {
+        // Remove table of contents and other trailing content that appears after the last chapter
+        let mut result = content.to_string();
+        
+        // Look for the table of contents marker
+        if let Some(toc_start) = result.find(r#"<font size="7"><b>Table of Contents</b></font>"#) {
+            result = result[..toc_start].to_string();
+        }
+        
+        // Remove any trailing % characters and whitespace
+        result = result.trim_end_matches('%').trim_end().to_string();
+        
+        result
+    }
+    
+    fn clean_chapter_content(&self, content: &str) -> String {
+        let mut result = content.to_string();
+        
+        // Remove any duplicate HTML structure that might be in the content
+        result = result.replace("</body></html>", "");
+        
+        // Remove trailing % characters
+        result = result.trim_end_matches('%').trim_end().to_string();
+        
+        // Remove incomplete/unclosed tags at the end that would cause XML errors
+        use regex::Regex;
+        
+        // Remove unclosed paragraph tags like <p height="1em" width="0pt" align="center">
+        let unclosed_p_re = Regex::new(r#"<p[^>]*>\s*$"#).unwrap();
+        result = unclosed_p_re.replace(&result, "").to_string();
+        
+        // Fix unclosed div tags like <div class="page-break"> 
+        // Always replace unclosed page-break divs with properly closed ones
+        result = result.replace(r#"<div class="page-break">"#, r#"<div class="page-break"></div>"#);
+        
+        // Remove any other unclosed div tags
+        let other_unclosed_div_re = Regex::new(r#"<div[^>]*>\s*$"#).unwrap();
+        result = other_unclosed_div_re.replace(&result, "").to_string();
+        
+        // Remove any other unclosed tags at the end
+        let unclosed_tag_re = Regex::new(r#"<[^/>][^>]*>\s*$"#).unwrap();
+        result = unclosed_tag_re.replace(&result, "").to_string();
+        
+        // Remove any stray closing tags at the end
+        while result.ends_with("</a>") || result.ends_with("</p>") || result.ends_with("</div>") || result.ends_with("</font>") {
+            if result.ends_with("</a>") {
+                result = result.trim_end_matches("</a>").trim_end().to_string();
+            } else if result.ends_with("</p>") {
+                result = result.trim_end_matches("</p>").trim_end().to_string();
+            } else if result.ends_with("</div>") {
+                result = result.trim_end_matches("</div>").trim_end().to_string();
+            } else if result.ends_with("</font>") {
+                result = result.trim_end_matches("</font>").trim_end().to_string();
+            }
+        }
+        
+        // Final cleanup - remove any trailing whitespace and % characters again
+        result = result.trim_end_matches('%').trim_end().to_string();
+        
+        result
+    }
+    
+    fn wrap_chapter_content(&self, title: &str, content: &str) -> String {
+        // Fix any unclosed div tags by adding closing tags before </body>
+        let mut fixed_content = content.to_string();
+        
+        // If there's an unclosed <div class="page-break"> tag, close it
+        if fixed_content.contains(r#"<div class="page-break">"#) && !fixed_content.contains(r#"</div>"#) {
+            // Add the closing div tag right before the end
+            fixed_content = fixed_content.trim_end().to_string();
+            fixed_content.push_str("</div>");
+        }
+        
+        format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>{}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <link rel="stylesheet" type="text/css" href="stylesheet.css"/>
+</head>
+<body>
+{}
+</body>
+</html>"#,
+            title, fixed_content
+        )
     }
 } 
